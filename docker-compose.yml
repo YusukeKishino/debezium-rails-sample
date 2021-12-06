@@ -1,0 +1,63 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:10.14-alpine
+    environment:
+      - POSTGRES_USER=raksul
+      - POSTGRES_PASSWORD=password
+      - PGPASSWORD=password
+      - POSTGRES_DB=old_app_development
+    command: [ "postgres", "-c", "wal_level=logical" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+  old_app:
+    build:
+      context: old_app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    command: /bin/bash -c "bundle exec rake db:migrate && bundle exec rails s -p 3000 -b 0.0.0.0"
+
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: new_app_development
+      MYSQL_USER: raksul
+      MYSQL_PASSWORD: password
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD
+  new_app:
+    build:
+      context: new_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - '3001:3001'
+    command: /bin/bash -c "bundle exec rake db:migrate && bundle exec rails s -p 3001 -b 0.0.0.0"
+
+  zookeeper:
+    image: debezium/zookeeper:1.7
+    hostname: zookeeper
+  kafka:
+    image: debezium/kafka:1.7
+    hostname: kafka
+    depends_on:
+      - zookeeper
+    restart: always
+    environment:
+      - ZOOKEEPER_CONNECT=zookeeper:2181
+  connect:
+    image: debezium/connect:1.7
+    hostname: connect
+    ports:
+      - '8083:8083'
+    environment:
+      - GROUP_ID=1
+      - CONFIG_STORAGE_TOPIC=my_connect_configs
+      - OFFSET_STORAGE_TOPIC=my_connect_offsets
+      - STATUS_STORAGE_TOPIC=my_connect_statuses
+      - BOOTSTRAP_SERVERS=kafka:9092
