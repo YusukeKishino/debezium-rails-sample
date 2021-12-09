@@ -18,7 +18,7 @@ services:
         condition: service_healthy
     ports:
       - '3000:3000'
-    command: /bin/bash -c "bundle exec rake db:migrate && bundle exec rails s -p 3000 -b 0.0.0.0"
+    command: /bin/bash -c "bundle exec rake db:migrate && bundle exec rake db:seed && bundle exec rails s -p 3000 -b 0.0.0.0"
 
   mysql:
     image: mysql:5.7
@@ -61,3 +61,11 @@ services:
       - OFFSET_STORAGE_TOPIC=my_connect_offsets
       - STATUS_STORAGE_TOPIC=my_connect_statuses
       - BOOTSTRAP_SERVERS=kafka:9092
+
+  consumer:
+    build:
+      context: new_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: /bin/bash -c "bundle exec karafka server"
